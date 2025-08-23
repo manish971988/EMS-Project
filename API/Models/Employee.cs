@@ -1,4 +1,5 @@
 using System;
+using System.ComponentModel.DataAnnotations;
 
 namespace EMS.API.Models
 {
@@ -12,15 +13,22 @@ namespace EMS.API.Models
     public class Employee
     {
     public int Id { get; set; }
-    [System.ComponentModel.DataAnnotations.MaxLength(255)]
+    [Required]
+    [MaxLength(255)]
     public string Name { get; set; } = string.Empty;
-    [System.ComponentModel.DataAnnotations.MaxLength(255)]
+    [Required]
+    [MaxLength(255)]
     public string Department { get; set; } = string.Empty;
-    [System.ComponentModel.DataAnnotations.MaxLength(255)]
+    [Required]
+    [MaxLength(255)]
     public string Designation { get; set; } = string.Empty;
+    [Required]
+    [Range(1, double.MaxValue, ErrorMessage = "Salary must be positive")]
     public decimal Salary { get; set; }
-    [System.ComponentModel.DataAnnotations.MaxLength(255)]
+    [Required]
+    [MaxLength(255)]
     public string Address { get; set; } = string.Empty;
+    [Required]
     public EmployeeStatus Status { get; set; }
     public int CreatedBy { get; set; }
     public User? CreatedByUser { get; set; }
