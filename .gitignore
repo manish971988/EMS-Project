@@ -1,0 +1,30 @@
+# Ignore build output and IDE files
+
+# API project
+/API/bin/
+/API/obj/
+
+# UI project
+/UI/node_modules/
+/UI/dist/
+/UI/bin/
+/UI/obj/
+
+# VS Code
+.vscode/
+
+# OS files
+*.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Environment files
+.env
+.env.*
+
+# Others
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
