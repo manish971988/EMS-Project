@@ -1,14 +1,17 @@
-import { createRouter, createWebHistory } from 'vue-router'
-import AddEmployee from './views/AddEmployee.vue'
+import { createRouter, createWebHistory } from 'vue-router';
+import EmployeeList from './views/EmployeeList.vue';
+import EditEmployee from './views/EditEmployee.vue';
+import AddEmployee from './views/AddEmployee.vue';
 
 const routes = [
-  { path: '/add-employee', component: AddEmployee },
-  // Add other routes here
-]
-
+  { path: '/', redirect: '/employees' }, // Default route
+  { path: '/employees', component: EmployeeList },
+  { path: '/employees/:id/edit', component: EditEmployee },
+  { path: '/add-employee', component: AddEmployee }
+];
 const router = createRouter({
   history: createWebHistory(),
-  routes,
-})
+  routes
+});
 
-export default router
+export default router;
