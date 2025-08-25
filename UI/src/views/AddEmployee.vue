@@ -1,4 +1,4 @@
-<template>
+<template>  
   <div class="add-employee-container">
     <div class="form-card">
       <h2><img src="/logo.png" alt="EMS Logo" class="logo" /> Add Employee</h2>
