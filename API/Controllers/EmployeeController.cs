@@ -109,15 +109,13 @@ public class EmployeeController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetEmployees([FromQuery] string status = "Active")
+    public async Task<IActionResult> GetEmployees([FromQuery] string status = "")
     {
-        EmployeeStatus statusEnum;
-        if (!Enum.TryParse<EmployeeStatus>(status, true, out statusEnum))
-            statusEnum = EmployeeStatus.Active;
+        List<Employee> employees;
 
-        var employees = await _context.Employees
-            .Where(e => e.Status == statusEnum)
-            .ToListAsync();
+        employees = await _context.Employees
+                .Where(e => e.Status == EmployeeStatus.Active || e.Status == EmployeeStatus.Inactive)
+                .ToListAsync();
         return Ok(employees);
     }
 

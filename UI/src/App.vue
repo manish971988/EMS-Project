@@ -4,7 +4,7 @@ import HelloWorld from './components/HelloWorld.vue'
 
 <template>
   <nav>
-    <router-link to="/add-employee">Add Employee</router-link>
+    <router-link to="/add-employee"></router-link>
     <!-- Add more navigation links here -->
   </nav>
   <router-view />
