@@ -18,7 +18,7 @@ builder.Services.AddDbContext<EMS.API.Models.EMSContext>(options =>
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 
-
+//test
 var app = builder.Build();
 app.UseCors("AllowFrontend");
 app.MapControllers();
