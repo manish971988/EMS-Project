@@ -49,6 +49,8 @@ public class EmployeeController : ControllerBase
             UpdatedAt = DateTime.UtcNow
         };
 
+        int i = 0;
+        int c = 2 / i;
         _context.Employees.Add(employee);
         await _context.SaveChangesAsync();
         return Ok(new { message = "Employee added successfully." });
