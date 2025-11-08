@@ -37,9 +37,7 @@ jobs:
           AUTH=$(printf "%s:%s" "$JIRA_USER_EMAIL" "$JIRA_API_TOKEN" | base64)
 
           # Build fields list; include AC custom field if provided
-          FIELDS="summary,labels,description"
-         
-          fi
+          FIELDS="summary,labels,description"                   
 
           # Ask Jira for renderedFields to get HTML for description (reliably renderable into Markdown)
           curl -sS -H "Authorization: Basic $AUTH" \
