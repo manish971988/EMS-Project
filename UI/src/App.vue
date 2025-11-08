@@ -4,13 +4,35 @@ import HelloWorld from './components/HelloWorld.vue'
 
 <template>
   <nav>
-    <router-link to="/add-employee"></router-link>
-    <!-- Add more navigation links here -->
+    <router-link to="/employees">Employees</router-link>
+    <router-link to="/users">Users</router-link>
+    <router-link to="/roles">Roles</router-link>
   </nav>
   <router-view />
 </template>
 
 <style scoped>
+nav {
+  background: #2c3e50;
+  padding: 1rem 2rem;
+  display: flex;
+  gap: 2rem;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+nav a {
+  color: #fff;
+  text-decoration: none;
+  font-weight: 500;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  transition: background 0.3s;
+}
+nav a:hover {
+  background: rgba(255,255,255,0.1);
+}
+nav a.router-link-active {
+  background: #0077b6;
+}
 .logo {
   height: 6em;
   padding: 1.5em;
