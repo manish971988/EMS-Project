@@ -26,36 +26,55 @@ jobs:
           JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
           JIRA_USER_EMAIL: ${{ secrets.JIRA_USER_EMAIL }}
           JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          JIRA_KEY: ${{ env.JIRA_KEY }}
         run: |
           set -e
 
+          # 1) Validate secrets
           if [ -z "$JIRA_BASE_URL" ] || [ -z "$JIRA_USER_EMAIL" ] || [ -z "$JIRA_API_TOKEN" ]; then
             echo "Missing Jira secrets. Please set JIRA_BASE_URL, JIRA_USER_EMAIL, JIRA_API_TOKEN."
             exit 1
           fi
 
-          AUTH=$(printf "%s:%s" "$JIRA_USER_EMAIL" "$JIRA_API_TOKEN" | base64)
+          # 2) Clean base URL and build Basic auth without newline
+          BASE="${JIRA_BASE_URL%/}"
+          AUTH=$(printf "%s:%s" "$JIRA_USER_EMAIL" "$JIRA_API_TOKEN" | base64 | tr -d '\n')
 
-          # Build fields list; include AC custom field if provided
-          FIELDS="summary,labels,description"                   
+          # 3) Build fields list
+          FIELDS="summary,labels,description"
+        
 
-          # Ask Jira for renderedFields to get HTML for description (reliably renderable into Markdown)
-          curl -sS -H "Authorization: Basic $AUTH" \
-               -H "Accept: application/json" \
-               "${JIRA_BASE_URL}/rest/api/3/issue/${JIRA_KEY}?fields=${FIELDS}&expand=renderedFields" > issue.json
+          # 4) Call Jira (capture HTTP code + body)
+          set +e
+          HTTP_CODE=$(curl -sS -w "%{http_code}" -o issue.json \
+            --fail-with-body \
+            -H "Authorization: Basic $AUTH" \
+            -H "Accept: application/json" \
+            "$BASE/rest/api/3/issue/${JIRA_KEY}?fields=${FIELDS}&expand=renderedFields")
+          CURL_RC=$?
+          set -e
 
-          # Extract fields
+          if [ $CURL_RC -ne 0 ] || [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
+            echo "Jira API request failed. HTTP=$HTTP_CODE"
+            echo "Response body:"
+            cat issue.json || true
+            exit 1
+          fi
+
+          # 5) Extract fields with jq
           TITLE=$(jq -r '.fields.summary // ""' issue.json)
-          # description (HTML). If rendered is missing, fall back to plain (may be ADF object).
+
+          # Prefer rendered HTML; fall back to raw (ADF/string)
           DESCRIPTION_HTML=$(jq -r '.renderedFields.description // ""' issue.json)
           if [ -z "$DESCRIPTION_HTML" ] || [ "$DESCRIPTION_HTML" = "null" ]; then
             DESCRIPTION_HTML=$(jq -r '.fields.description // ""' issue.json)
           fi
+     
 
           LABELS=$(jq -r '[.fields.labels[]] | join(", ")' issue.json)
           if [ "$LABELS" = "null" ]; then LABELS=""; fi
 
-          # Outputs for next steps
+          # 6) Emit outputs
           {
             echo "title<<EOF"
             echo "$TITLE"
@@ -96,7 +115,11 @@ jobs:
         run: |
           set -e
 
-          TITLE_LINE="${{ env.JIRA_KEY }}: ${{ steps.jira.outputs.title }}"
+          # Build title with fallback if Jira title is empty
+          BASE_TITLE="${{ steps.jira.outputs.title }}"
+          if [ -z "$BASE_TITLE" ]; then BASE_TITLE="Work for ${{ env.JIRA_KEY }}"; fi
+          TITLE_LINE="${{ env.JIRA_KEY }}: ${BASE_TITLE}"
+
           NUM=$(gh issue list --search "$TITLE_LINE in:title" --state open --json number --jq '.[0].number')
 
           # Build --label flags from Jira labels (comma-separated)
