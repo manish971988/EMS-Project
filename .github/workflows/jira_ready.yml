@@ -26,7 +26,6 @@ jobs:
           JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
           JIRA_USER_EMAIL: ${{ secrets.JIRA_USER_EMAIL }}
           JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
-          JIRA_AC_FIELD_ID: ${{ secrets.JIRA_AC_FIELD_ID }} # optional
         run: |
           set -e
 
@@ -39,8 +38,7 @@ jobs:
 
           # Build fields list; include AC custom field if provided
           FIELDS="summary,labels,description"
-          if [ -n "$JIRA_AC_FIELD_ID" ]; then
-            FIELDS="$FIELDS,$JIRA_AC_FIELD_ID"
+         
           fi
 
           # Ask Jira for renderedFields to get HTML for description (reliably renderable into Markdown)
@@ -54,13 +52,6 @@ jobs:
           DESCRIPTION_HTML=$(jq -r '.renderedFields.description // ""' issue.json)
           if [ -z "$DESCRIPTION_HTML" ] || [ "$DESCRIPTION_HTML" = "null" ]; then
             DESCRIPTION_HTML=$(jq -r '.fields.description // ""' issue.json)
-          fi
-
-          # Acceptance Criteria (custom field) if provided
-          if [ -n "$JIRA_AC_FIELD_ID" ]; then
-            AC=$(jq -r ".fields[\"${JIRA_AC_FIELD_ID}\"] // \"\"" issue.json)
-          else
-            AC=""
           fi
 
           LABELS=$(jq -r '[.fields.labels[]] | join(", ")' issue.json)
