@@ -18,7 +18,7 @@ public class EmployeeController : ControllerBase
     public async Task<IActionResult> AddEmployee([FromBody] EmployeeDto employeeDto)
     {
         if (string.IsNullOrWhiteSpace(employeeDto.Name) ||
-            string.IsNullOrWhiteSpace(employeeDto.Department) ||
+            employeeDto.DepartmentId <= 0 ||
             string.IsNullOrWhiteSpace(employeeDto.Designation) ||
             employeeDto.Salary <= 0 ||
             string.IsNullOrWhiteSpace(employeeDto.Status))
@@ -38,7 +38,7 @@ public class EmployeeController : ControllerBase
         var employee = new Employee
         {
             Name = employeeDto.Name,
-            Department = employeeDto.Department,
+            DepartmentId = employeeDto.DepartmentId,
             Designation = employeeDto.Designation,
             Salary = employeeDto.Salary,
             Address = employeeDto.Address,
@@ -67,7 +67,7 @@ public class EmployeeController : ControllerBase
 
         // Validation
         if (string.IsNullOrWhiteSpace(employeeDto.Name) ||
-            string.IsNullOrWhiteSpace(employeeDto.Department) ||
+            employeeDto.DepartmentId <= 0 ||
             string.IsNullOrWhiteSpace(employeeDto.Designation) ||
             employeeDto.Salary <= 0 ||
             string.IsNullOrWhiteSpace(employeeDto.Status) ||
@@ -78,7 +78,7 @@ public class EmployeeController : ControllerBase
 
         // Update fields
         employee.Name = employeeDto.Name;
-        employee.Department = employeeDto.Department;
+        employee.DepartmentId = employeeDto.DepartmentId;
         employee.Designation = employeeDto.Designation;
         employee.Salary = employeeDto.Salary;
         employee.Address = employeeDto.Address;
@@ -114,6 +114,7 @@ public class EmployeeController : ControllerBase
         List<Employee> employees;
 
         employees = await _context.Employees
+                .Include(e => e.Department)
                 .Where(e => e.Status == EmployeeStatus.Active || e.Status == EmployeeStatus.Inactive)
                 .ToListAsync();
         return Ok(employees);
@@ -122,7 +123,9 @@ public class EmployeeController : ControllerBase
     [HttpGet("{id}")]
     public async Task<IActionResult> GetEmployee(int id)
     {
-        var employee = await _context.Employees.FindAsync(id);
+        var employee = await _context.Employees
+            .Include(e => e.Department)
+            .FirstOrDefaultAsync(e => e.Id == id);
         if (employee == null) return NotFound();
         return Ok(employee);
     }
@@ -138,7 +141,7 @@ public class EmployeeController : ControllerBase
 public class EmployeeDto
 {
     public string Name { get; set; } = string.Empty;
-    public string Department { get; set; } = string.Empty;
+    public int DepartmentId { get; set; }
     public string Designation { get; set; } = string.Empty;
     public decimal Salary { get; set; }
     public string Address { get; set; } = string.Empty;

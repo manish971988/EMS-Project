@@ -17,8 +17,8 @@ namespace EMS.API.Models
     [MaxLength(255)]
     public string Name { get; set; } = string.Empty;
     [Required]
-    [MaxLength(255)]
-    public string Department { get; set; } = string.Empty;
+    public int DepartmentId { get; set; }
+    public Department? Department { get; set; }
     [Required]
     [MaxLength(255)]
     public string Designation { get; set; } = string.Empty;
