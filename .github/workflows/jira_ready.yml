@@ -24,8 +24,6 @@ jobs:
           ## Story
           ${{ github.event.client_payload.title }}
 
-          ## Description
-          ${{ github.event.client_payload.description }}
 
           ## Acceptance Criteria
           ${{ github.event.client_payload.acceptanceCriteria }}
