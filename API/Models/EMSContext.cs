@@ -10,6 +10,7 @@ namespace EMS.API.Models
         public DbSet<User> Users { get; set; }
         public DbSet<Employee> Employees { get; set; }
         public DbSet<City> Cities { get; set; }
+        public DbSet<EmpDepartment> EmpDepartments { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -37,6 +38,12 @@ namespace EMS.API.Models
                 .HasOne(e => e.UpdatedByUser)
                 .WithMany()
                 .HasForeignKey(e => e.UpdatedBy)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Employee>()
+                .HasOne(e => e.EmpDepartment)
+                .WithMany()
+                .HasForeignKey(e => e.EmpDepartmentId)
                 .OnDelete(DeleteBehavior.Restrict);
         }
     }
