@@ -31,6 +31,13 @@ public class EmployeeController : ControllerBase
             return BadRequest("Invalid status value. Use 'Active', 'Inactive', or 'Deleted'.");
         }
 
+        // Validate that the department exists
+        var departmentExists = await _context.Departments.AnyAsync(d => d.Id == employeeDto.DepartmentId);
+        if (!departmentExists)
+        {
+            return BadRequest("Invalid department ID.");
+        }
+
         var userId = GetLoggedInUserId(); // Implement this method based on your auth
         if (userId == null)
             return Unauthorized();
@@ -74,6 +81,13 @@ public class EmployeeController : ControllerBase
             !(employeeDto.Status == "Active" || employeeDto.Status == "Inactive"))
         {
             return BadRequest("Invalid input.");
+        }
+
+        // Validate that the department exists
+        var departmentExists = await _context.Departments.AnyAsync(d => d.Id == employeeDto.DepartmentId);
+        if (!departmentExists)
+        {
+            return BadRequest("Invalid department ID.");
         }
 
         // Update fields
