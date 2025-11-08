@@ -1,4 +1,4 @@
-name: Jira Ready → GitHub Issue
+name: Jira Ready → GitHub Issue + Controlled Copilot Branch
 
 on:
   repository_dispatch:
@@ -6,40 +6,73 @@ on:
 
 permissions:
   issues: write
-  contents: read
+  contents: write    # needed to push branch
+  pull-requests: write
 
 jobs:
-  create_or_update_issue:
+  create_issue_and_branch:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
 
+    env:
+      JIRA_KEY: ${{ github.event.client_payload.jiraKey }}
+      JIRA_URL: ${{ github.event.client_payload.jiraUrl }}
+      TITLE: ${{ github.event.client_payload.title }}
+      DESCRIPTION: ${{ github.event.client_payload.description }}
+      ACCEPTANCE_CRITERIA: ${{ github.event.client_payload.acceptanceCriteria }}
+      RAW_LABELS: ${{ github.event.client_payload.labels }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Prepare issue body
       - name: Prepare Issue body
         id: prep
         run: |
           cat > body.md << 'EOF'
-          **Jira**: ${{ github.event.client_payload.jiraKey }}
-          Link: ${{ github.event.client_payload.jiraUrl }}
+          **Jira**: ${JIRA_KEY}
+          Link: ${JIRA_URL}
 
           ## Story
-          ${{ github.event.client_payload.title }}
+          ${TITLE}
 
           ## Description
-          ${{ github.event.client_payload.description }}
+          ${DESCRIPTION}
 
           ## Acceptance Criteria
-          ${{ github.event.client_payload.acceptanceCriteria }}
+          ${ACCEPTANCE_CRITERIA}
 
           ---
-          _Labels from Jira_: `${{ github.event.client_payload.labels }}`
+          _Labels from Jira_: `${RAW_LABELS}`
           EOF
 
+      # Compute and create branch name
+      - name: Compute and create branch
+        id: branch
+        run: |
+          set -e
+          SLUG=$(printf "%s" "$TITLE" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+|-+$//g' | cut -c1-40)
+          BRANCH="copilot/${JIRA_KEY}-${SLUG}"
+          echo "branch=$BRANCH" >> $GITHUB_OUTPUT
+
+          git fetch origin
+          DEFAULT=$(git remote show origin | awk '/HEAD branch/ {print $NF}')
+
+          git checkout origin/$DEFAULT
+          git switch -c "$BRANCH"
+          git config user.name "automation-bot"
+          git config user.email "automation-bot@users.noreply.github.com"
+          git commit --allow-empty -m "${JIRA_KEY} bootstrap branch"
+          git push --set-upstream origin "$BRANCH"
+
+      # Create or update GitHub Issue
       - name: Create or update Issue
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          set -e
-          title="${{ github.event.client_payload.jiraKey }}: ${{ github.event.client_payload.title }}"
+          title="${JIRA_KEY}: ${TITLE}"
           num=$(gh issue list --search "$title in:title" --json number --jq '.[0].number')
           if [ -n "$num" ]; then
             echo "Issue exists #$num, adding comment"
@@ -52,3 +85,24 @@ jobs:
               --label "from-jira" \
               --label "ready-for-dev"
           fi
+
+      # Tell Copilot which branch to use
+      - name: Add Copilot instruction comment
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          title="${JIRA_KEY}: ${TITLE}"
+          num=$(gh issue list --search "$title in:title" --json number --jq '.[0].number')
+
+          gh issue comment "$num" -b "@copilot Please implement Jira ${JIRA_KEY} on branch \`${{ steps.branch.outputs.branch }}\`.
+
+          Jira: ${JIRA_URL}
+
+          **Acceptance Criteria**
+          ${ACCEPTANCE_CRITERIA}
+
+          Notes:
+          - Work only on branch: \`${{ steps.branch.outputs.branch }}\`
+          - Do not create new branches or PRs.
+          - PR should target the default branch automatically.
+          - Keep changes small and follow existing project conventions."
