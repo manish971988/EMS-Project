@@ -56,7 +56,7 @@ jobs:
       - name: Prepare Issue body
         id: prep
         run: |
-          cat > body.md << 'EOF'
+          cat > body.md << EOF
           **Jira**: $JIRA_KEY
           Link: $JIRA_URL
 
