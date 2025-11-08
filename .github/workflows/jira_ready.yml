@@ -52,12 +52,3 @@ jobs:
               --label "from-jira" \
               --label "ready-for-dev"
           fi
-
-      - name: Add quick actions comment (manual step)
-        if: success()
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          title="${{ github.event.client_payload.jiraKey }}: ${{ github.event.client_payload.title }}"
-          num=$(gh issue list --search "$title in:title" --json number --jq '.[0].number')
-          gh issue comment "$num" --body $'**Next step (manual one-click):**\n- Assign this Issue to **Copilot’s coding agent** to start implementation.\n- Or run the **Create Branch & Draft PR** workflow from the Actions tab (if you prefer scaffolding first).'
