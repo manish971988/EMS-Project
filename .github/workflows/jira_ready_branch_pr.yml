@@ -128,8 +128,4 @@ jobs:
           Notes:
           - Do not create new branches or PRs.
           - Commit directly to \`${{ steps.naming.outputs.branch }}\`.
-          - Keep changes minimal and adhere to project conventions and tests."
-
-      # Optional: Post PR link back to Jira (keep if you already do this via Jira Automation)
-      - name: (Optional) Print PR URL for downstream tools
-        run: echo "PR URL: ${{ steps.pr.outputs.url }}"
+          - Keep changes minimal and adhere to project conventions and tests."    
