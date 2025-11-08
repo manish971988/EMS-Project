@@ -54,7 +54,7 @@ jobs:
           echo "Skipping Jira update because no issue key was detected."
           exit 0
 
-      - name: Post PR URL as a Jira comment
+      - name: Post PR URL as a Jira comment (ADF)
         env:
           JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
           JIRA_USER_EMAIL: ${{ secrets.JIRA_USER_EMAIL }}
@@ -64,22 +64,40 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           ACTOR: ${{ github.actor }}
         run: |
-          set -euo pipefail
+         set -euo pipefail
 
           if [ -z "${JIRA_BASE_URL:-}" ] || [ -z "${JIRA_USER_EMAIL:-}" ] || [ -z "${JIRA_API_TOKEN:-}" ]; then
             echo "Missing Jira secrets. Please set JIRA_BASE_URL, JIRA_USER_EMAIL, JIRA_API_TOKEN."
             exit 1
           fi
 
-          BODY=$(jq -n \
-            --arg pr "$PR_URL" \
-            --arg num "$PR_NUMBER" \
-            --arg actor "$ACTOR" \
-            '{body: ("Pull request #" + $num + " by " + $actor + ": " + $pr)}')
+          # Build ADF (Atlassian Document Format) comment body
+          COMMENT_TEXT="Pull request #${PR_NUMBER} by ${ACTOR}: ${PR_URL}"
+          BODY=$(jq -n --arg t "$COMMENT_TEXT" '{
+            body: {
+              type: "doc",
+              version: 1,
+              content: [
+                {
+                  type: "paragraph",
+                  content: [
+                    { type: "text", text: $t }
+                  ]
+                }
+              ]
+            }
+          }')
 
+          # Normalize base URL to avoid double slashes if JIRA_BASE_URL ends with '/'
+          BASE="${JIRA_BASE_URL%/}"
+
+          # TEMP: Uncomment the next line if you need to see the exact payload/url during debugging
+          # echo "$BODY" | jq .
+
+          # Send the comment
           curl --fail --silent --show-error \
             --request POST \
-            --url "$JIRA_BASE_URL/rest/api/3/issue/$ISSUE_KEY/comment" \
+            --url "${BASE}/rest/api/3/issue/${ISSUE_KEY}/comment" \
             --user "$JIRA_USER_EMAIL:$JIRA_API_TOKEN" \
             --header 'Content-Type: application/json' \
             --data "$BODY"
