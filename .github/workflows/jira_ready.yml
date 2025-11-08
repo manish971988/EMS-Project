@@ -3,6 +3,32 @@ name: Jira Ready → GitHub Issue
 on:
   repository_dispatch:
     types: [jira_ready_for_dev]
+  workflow_dispatch:
+    inputs:
+      jiraKey:
+        description: "Jira issue key (e.g., EMS-123)"
+        required: true
+        type: string
+      jiraUrl:
+        description: "Link to the Jira issue"
+        required: true
+        type: string
+      title:
+        description: "Story title"
+        required: true
+        type: string
+      description:
+        description: "Description"
+        required: false
+        type: string
+      acceptanceCriteria:
+        description: "Acceptance Criteria"
+        required: false
+        type: string
+      labels:
+        description: "Comma-separated labels"
+        required: false
+        type: string
 
 permissions:
   issues: write
@@ -14,24 +40,37 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Normalize inputs so later steps can read a single set of env vars
+      - name: Normalize payload (dispatch vs manual)
+        id: norm
+        run: |
+          # If repository_dispatch, values come from github.event.client_payload.*
+          # If workflow_dispatch, take from inputs.*
+          echo "JIRA_KEY=${{ github.event.client_payload.jiraKey || inputs.jiraKey }}" >> $GITHUB_ENV
+          echo "JIRA_URL=${{ github.event.client_payload.jiraUrl || inputs.jiraUrl }}" >> $GITHUB_ENV
+          echo "TITLE=${{ github.event.client_payload.title || inputs.title }}" >> $GITHUB_ENV
+          echo "DESCRIPTION=${{ github.event.client_payload.description || inputs.description }}" >> $GITHUB_ENV
+          echo "AC=${{ github.event.client_payload.acceptanceCriteria || inputs.acceptanceCriteria }}" >> $GITHUB_ENV
+          echo "LABELS=${{ github.event.client_payload.labels || inputs.labels }}" >> $GITHUB_ENV
+
       - name: Prepare Issue body
         id: prep
         run: |
           cat > body.md << 'EOF'
-          **Jira**: ${{ github.event.client_payload.jiraKey }}
-          Link: ${{ github.event.client_payload.jiraUrl }}
+          **Jira**: $JIRA_KEY
+          Link: $JIRA_URL
 
           ## Story
-          ${{ github.event.client_payload.title }}
+          $TITLE
 
           ## Description
-          ${{ github.event.client_payload.description }}
+          ${DESCRIPTION:-}
 
           ## Acceptance Criteria
-          ${{ github.event.client_payload.acceptanceCriteria }}
+          ${AC:-}
 
           ---
-          _Labels from Jira_: `${{ github.event.client_payload.labels }}`
+          _Labels from Jira_: `${LABELS:-}`
           EOF
 
       - name: Create or update Issue
@@ -39,18 +78,33 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -e
-          title="${{ github.event.client_payload.jiraKey }}: ${{ github.event.client_payload.title }}"
-          num=$(gh issue list --search "$title in:title" --json number --jq '.[0].number')
+          # Issue title we search or create with
+          issue_title="$JIRA_KEY: $TITLE"
+
+          # Try to find an existing issue with the same title
+          num=$(gh issue list --search "$issue_title in:title" --json number --jq '.[0].number')
+
+          # Add labels array if provided
+          LABEL_ARGS=()
+          if [ -n "${LABELS:-}" ]; then
+            # split by comma/spaces
+            IFS=', ' read -r -a arr <<< "$LABELS"
+            for l in "${arr[@]}"; do
+              [ -n "$l" ] && LABEL_ARGS+=( --label "$l" )
+            done
+          fi
+
           if [ -n "$num" ]; then
             echo "Issue exists #$num, adding comment"
             gh issue comment "$num" -F body.md
           else
             echo "Creating new Issue"
             gh issue create \
-              --title "$title" \
+              --title "$issue_title" \
               -F body.md \
               --label "from-jira" \
-              --label "ready-for-dev"
+              --label "ready-for-dev" \
+              "${LABEL_ARGS[@]}"
           fi
 
       - name: Add quick actions comment (manual step)
@@ -58,7 +112,6 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          title="${{ github.event.client_payload.jiraKey }}: ${{ github.event.client_payload.title }}"
-          num=$(gh issue list --search "$title in:title" --json number --jq '.[0].number')
+          issue_title="$JIRA_KEY: $TITLE"
+          num=$(gh issue list --search "$issue_title in:title" --json number --jq '.[0].number')
           gh issue comment "$num" --body $'**Next step (manual one-click):**\n- Assign this Issue to **Copilot’s coding agent** to start implementation.\n- Or run the **Create Branch & Draft PR** workflow from the Actions tab (if you prefer scaffolding first).'
-
