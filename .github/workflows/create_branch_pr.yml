@@ -34,10 +34,10 @@ jobs:
           echo "branch=$BRANCH" >> $GITHUB_OUTPUT
           echo "Branch to create: $BRANCH"
 
-      - name: Checkout main
+      - name: Checkout master
         uses: actions/checkout@v4
         with:
-          ref: main
+          ref: master
           fetch-depth: 0
 
       - name: Create scaffold files
@@ -77,7 +77,7 @@ jobs:
           echo "Creating draft PR for branch: $BRANCH"
 
           gh pr create \
-            --base main \
+            --base master \
             --head "$BRANCH" \
             --title "${{ inputs.jiraKey }}: New scaffold branch" \
             --body "This PR was auto-generated from the **Create Branch & Draft PR** workflow.  
