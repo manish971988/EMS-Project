@@ -11,25 +11,94 @@ permissions:
 jobs:
   create_or_update_issue:
     runs-on: ubuntu-latest
+
+    env:
+      # From repository_dispatch payload (keep the Jira rule tiny: only jiraKey/jiraUrl)
+      JIRA_KEY: ${{ github.event.client_payload.jiraKey }}
+      JIRA_URL: ${{ github.event.client_payload.jiraUrl }}
+
     steps:
       - uses: actions/checkout@v4
+
+      - name: Fetch Jira fields (summary, description HTML, AC, labels)
+        id: jira
+        env:
+          JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
+          JIRA_USER_EMAIL: ${{ secrets.JIRA_USER_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          JIRA_AC_FIELD_ID: ${{ secrets.JIRA_AC_FIELD_ID }} # optional
+        run: |
+          set -e
+
+          if [ -z "$JIRA_BASE_URL" ] || [ -z "$JIRA_USER_EMAIL" ] || [ -z "$JIRA_API_TOKEN" ]; then
+            echo "Missing Jira secrets. Please set JIRA_BASE_URL, JIRA_USER_EMAIL, JIRA_API_TOKEN."
+            exit 1
+          fi
+
+          AUTH=$(printf "%s:%s" "$JIRA_USER_EMAIL" "$JIRA_API_TOKEN" | base64)
+
+          # Build fields list; include AC custom field if provided
+          FIELDS="summary,labels,description"
+          if [ -n "$JIRA_AC_FIELD_ID" ]; then
+            FIELDS="$FIELDS,$JIRA_AC_FIELD_ID"
+          fi
+
+          # Ask Jira for renderedFields to get HTML for description (reliably renderable into Markdown)
+          curl -sS -H "Authorization: Basic $AUTH" \
+               -H "Accept: application/json" \
+               "${JIRA_BASE_URL}/rest/api/3/issue/${JIRA_KEY}?fields=${FIELDS}&expand=renderedFields" > issue.json
+
+          # Extract fields
+          TITLE=$(jq -r '.fields.summary // ""' issue.json)
+          # description (HTML). If rendered is missing, fall back to plain (may be ADF object).
+          DESCRIPTION_HTML=$(jq -r '.renderedFields.description // ""' issue.json)
+          if [ -z "$DESCRIPTION_HTML" ] || [ "$DESCRIPTION_HTML" = "null" ]; then
+            DESCRIPTION_HTML=$(jq -r '.fields.description // ""' issue.json)
+          fi
+
+          # Acceptance Criteria (custom field) if provided
+          if [ -n "$JIRA_AC_FIELD_ID" ]; then
+            AC=$(jq -r ".fields[\"${JIRA_AC_FIELD_ID}\"] // \"\"" issue.json)
+          else
+            AC=""
+          fi
+
+          LABELS=$(jq -r '[.fields.labels[]] | join(", ")' issue.json)
+          if [ "$LABELS" = "null" ]; then LABELS=""; fi
+
+          # Outputs for next steps
+          {
+            echo "title<<EOF"
+            echo "$TITLE"
+            echo "EOF"
+            echo "description_html<<EOF"
+            echo "$DESCRIPTION_HTML"
+            echo "EOF"
+            echo "ac<<EOF"
+            echo "$AC"
+            echo "EOF"
+            echo "labels=$LABELS"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Prepare Issue body
         id: prep
         run: |
           cat > body.md << 'EOF'
-          **Jira**: ${{ github.event.client_payload.jiraKey }}
-          Link: ${{ github.event.client_payload.jiraUrl }}
+          **Jira**: ${{ env.JIRA_KEY }}  
+          Link: ${{ env.JIRA_URL }}
 
           ## Story
-          ${{ github.event.client_payload.title }}
+          ${{ steps.jira.outputs.title }}
 
+          ## Description
+          <!-- Rendered from Jira (may include HTML) -->
+          ${{ steps.jira.outputs.description_html }}
 
           ## Acceptance Criteria
-          ${{ github.event.client_payload.acceptanceCriteria }}
+          ${{ steps.jira.outputs.ac }}
 
           ---
-          _Labels from Jira_: `${{ github.event.client_payload.labels }}`
+          _Labels from Jira_: `${{ steps.jira.outputs.labels }}`
           EOF
 
       - name: Create or update Issue
@@ -37,16 +106,25 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -e
-          title="${{ github.event.client_payload.jiraKey }}: ${{ github.event.client_payload.title }}"
-          num=$(gh issue list --search "$title in:title" --json number --jq '.[0].number')
-          if [ -n "$num" ]; then
-            echo "Issue exists #$num, adding comment"
-            gh issue comment "$num" -F body.md
+
+          TITLE_LINE="${{ env.JIRA_KEY }}: ${{ steps.jira.outputs.title }}"
+          NUM=$(gh issue list --search "$TITLE_LINE in:title" --state open --json number --jq '.[0].number')
+
+          # Build --label flags from Jira labels (comma-separated)
+          LABEL_ARGS="--label from-jira --label ready-for-dev"
+          if [ -n "${{ steps.jira.outputs.labels }}" ]; then
+            IFS=',' read -ra LBL <<< "${{ steps.jira.outputs.labels }}"
+            for l in "${LBL[@]}"; do
+              l=$(echo "$l" | xargs)
+              [ -n "$l" ] && LABEL_ARGS="$LABEL_ARGS --label \"$l\""
+            done
+          fi
+
+          if [ -n "$NUM" ]; then
+            echo "Issue exists #$NUM, adding comment"
+            gh issue comment "$NUM" -F body.md
           else
             echo "Creating new Issue"
-            gh issue create \
-              --title "$title" \
-              -F body.md \
-              --label "from-jira" \
-              --label "ready-for-dev"
+            # shellcheck disable=SC2086
+            eval gh issue create --title \"${TITLE_LINE}\" -F body.md $LABEL_ARGS
           fi
