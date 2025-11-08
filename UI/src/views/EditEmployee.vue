@@ -10,9 +10,9 @@
         </div>
         <div class="form-row">
           <label>Department *</label>
-          <select v-model="employee.department" required>
+          <select v-model="employee.departmentId" required>
             <option value="" disabled>Select Department</option>
-            <option v-for="dept in departments" :key="dept" :value="dept">{{ dept }}</option>
+            <option v-for="dept in departments" :key="dept.id" :value="dept.id">{{ dept.name }}</option>
           </select>
         </div>
         <div class="form-row">
@@ -52,10 +52,10 @@ import { useRoute, useRouter } from 'vue-router';
 
 const route = useRoute();
 const router = useRouter();
-const departments = ['HR', 'Finance', 'IT', 'Operations', 'Sales'];
+const departments = ref([]);
 const employee = ref({
   name: '',
-  department: '',
+  departmentId: '',
   designation: '',
   salary: '',
   address: '',
@@ -67,6 +67,11 @@ const success = ref('');
 onMounted(async () => {
   const { id } = route.params;
   try {
+    // Fetch departments
+    const deptRes = await axios.get('/api/departments');
+    departments.value = deptRes.data;
+
+    // Fetch employee data
     const res = await axios.get(`/api/employees/${id}`);
     // Prevent editing deleted employees
     if (res.data.status === 'deleted') {
@@ -82,9 +87,7 @@ onMounted(async () => {
       employee.value.status = 'Inactive';
     }
     employee.value.name = res.data.name;
-    // Normalize department value to match dropdown options
-    const dept = res.data.department?.trim();
-    employee.value.department = departments.includes(dept) ? dept : '';
+    employee.value.departmentId = res.data.departmentId;
     employee.value.designation = res.data.designation;
     employee.value.salary = res.data.salary;
     employee.value.address = res.data.address;
@@ -96,7 +99,7 @@ onMounted(async () => {
 async function saveEmployee() {
   error.value = '';
   success.value = '';
-  if (!employee.value.name || !employee.value.department || !employee.value.designation || !employee.value.salary || !employee.value.status) {
+  if (!employee.value.name || !employee.value.departmentId || !employee.value.designation || !employee.value.salary || !employee.value.status) {
     error.value = 'Please fill all required fields.';
     return;
   }

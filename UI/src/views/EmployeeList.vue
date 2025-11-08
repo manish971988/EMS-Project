@@ -11,7 +11,7 @@
       <input v-model="search" placeholder="Search by name, department, or designation" />
       <select v-model="departmentFilter">
         <option value="">All Departments</option>
-        <option v-for="dept in departments" :key="dept" :value="dept">{{ dept }}</option>
+        <option v-for="dept in departments" :key="dept.id" :value="dept.name">{{ dept.name }}</option>
       </select>
     </div>
     <table class="employee-table">
@@ -28,7 +28,7 @@
       <tbody>
         <tr v-for="emp in filteredEmployees" :key="emp.id">
           <td>{{ emp.name }}</td>
-          <td>{{ emp.department }}</td>
+          <td>{{ emp.department?.name || 'N/A' }}</td>
           <td>{{ emp.designation }}</td>
           <td>{{ emp.salary }}</td>
           <td>
@@ -61,7 +61,7 @@ import { ref, computed, onMounted } from 'vue';
 import axios from 'axios';
 
 const employees = ref([]);
-const departments = ref(['HR', 'Finance', 'IT', 'Operations', 'Sales']);
+const departments = ref([]);
 const search = ref('');
 const departmentFilter = ref('');
 const showConfirm = ref(false);
@@ -71,8 +71,16 @@ const isAdmin = ref(true); // Replace with your actual auth logic
 const currentUserId = ref(1); // Replace with your actual user id logic
 
 onMounted(async () => {
-  const res = await axios.get('/api/employees?status=active');
-  employees.value = res.data;
+  try {
+    const [empRes, deptRes] = await Promise.all([
+      axios.get('/api/employees?status=active'),
+      axios.get('/api/departments')
+    ]);
+    employees.value = empRes.data;
+    departments.value = deptRes.data;
+  } catch (e) {
+    flashMessage.value = 'Failed to load data.';
+  }
 });
 
 const filteredEmployees = computed(() => {
@@ -81,12 +89,12 @@ const filteredEmployees = computed(() => {
     const s = search.value.toLowerCase();
     list = list.filter(emp =>
       emp.name.toLowerCase().includes(s) ||
-      emp.department.toLowerCase().includes(s) ||
+      emp.department?.name.toLowerCase().includes(s) ||
       emp.designation.toLowerCase().includes(s)
     );
   }
   if (departmentFilter.value) {
-    list = list.filter(emp => emp.department === departmentFilter.value);
+    list = list.filter(emp => emp.department?.name === departmentFilter.value);
   }
   return list;
 });

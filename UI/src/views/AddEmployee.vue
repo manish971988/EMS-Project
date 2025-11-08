@@ -11,9 +11,9 @@
         </div>
         <div class="form-row">
           <label>Department</label>
-          <select v-model="employee.department" required>
+          <select v-model="employee.departmentId" required>
             <option disabled value="">Select department</option>
-            <option v-for="dept in departments" :key="dept" :value="dept">{{ dept }}</option>
+            <option v-for="dept in departments" :key="dept.id" :value="dept.id">{{ dept.name }}</option>
           </select>
         </div>
         <div class="form-row">
@@ -45,15 +45,15 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
 import axios from 'axios';
 import { useRouter } from 'vue-router';
 
 const router = useRouter();
-const departments = ['HR', 'Finance', 'IT', 'Operations', 'Sales'];
+const departments = ref([]);
 const employee = ref({
   name: '',
-  department: '',
+  departmentId: '',
   designation: '',
   salary: '',
   address: '',
@@ -62,10 +62,19 @@ const employee = ref({
 const error = ref('');
 const success = ref('');
 
+onMounted(async () => {
+  try {
+    const res = await axios.get('/api/departments');
+    departments.value = res.data;
+  } catch (e) {
+    error.value = 'Failed to load departments.';
+  }
+});
+
 async function saveEmployee() {
   error.value = '';
   success.value = '';
-  if (!employee.value.name || !employee.value.department || !employee.value.designation || !employee.value.salary || !employee.value.status) {
+  if (!employee.value.name || !employee.value.departmentId || !employee.value.designation || !employee.value.salary || !employee.value.status) {
     error.value = 'Please fill all required fields.';
     return;
   }
