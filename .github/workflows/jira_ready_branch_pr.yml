@@ -7,7 +7,7 @@ on:
 permissions:
   contents: write         # create branch, push commit
   pull-requests: write    # create PR, comment on PR
-  issues: write           # (optional) if you also create/update GH issues
+  issues: write           # optional, if you also touch issues
   actions: read
 
 jobs:
@@ -43,31 +43,28 @@ jobs:
           DEFAULT=$(gh repo view --json defaultBranchRef -q .defaultBranchRef.name)
           echo "name=$DEFAULT" >> $GITHUB_OUTPUT
 
-      - name: Create branch at default HEAD (if missing)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # ✅ FIXED: create/use the branch LOCALLY, then push (avoids 'pathspec did not match' errors)
+      - name: Create/checkout branch locally, empty commit, push
+        id: seed_branch
         run: |
+          set -e
           BRANCH="${{ steps.naming.outputs.branch }}"
           DEFAULT="${{ steps.default.outputs.name }}"
-          SHA=$(gh api repos/${{ github.repository }}/git/ref/heads/$DEFAULT -q .object.sha)
 
-          set +e
-          gh api repos/${{ github.repository }}/git/refs/heads/$BRANCH >/dev/null 2>&1
-          EXISTS=$?
-          set -e
+          git fetch --prune origin
 
-          if [ $EXISTS -ne 0 ]; then
-            gh api -X POST repos/${{ github.repository }}/git/refs \
-              -f ref="refs/heads/$BRANCH" -f sha="$SHA"
+          # idempotent: if remote branch exists, track it; else create from default
+          if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
+            git fetch origin "$BRANCH":"refs/remotes/origin/$BRANCH"
+            git checkout -B "$BRANCH" "refs/remotes/origin/$BRANCH"
+          else
+            git checkout "origin/$DEFAULT"
+            git switch -c "$BRANCH"
+            git config user.name "automation-bot"
+            git config user.email "automation-bot@users.noreply.github.com"
+            git commit --allow-empty -m "${JIRA_KEY} bootstrap branch"
+            git push --set-upstream origin "$BRANCH"
           fi
-
-      - name: Push initial empty commit (ensures Jira linking sees the branch)
-        run: |
-          git config user.name "automation-bot"
-          git config user.email "automation-bot@users.noreply.github.com"
-          git checkout "${{ steps.naming.outputs.branch }}"
-          git commit --allow-empty -m "${JIRA_KEY} bootstrap branch"
-          git push origin "${{ steps.naming.outputs.branch }}"
 
       - name: Prepare PR body
         run: |
@@ -91,24 +88,25 @@ jobs:
           - Follow acceptance criteria and existing test conventions.
           EOF
 
-      - name: Create Draft PR (head = feature branch, base = default)
+      - name: Create or reuse Draft PR (head = feature branch, base = default)
         id: pr
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           DEFAULT="${{ steps.default.outputs.name }}"
-          TITLE="${JIRA_KEY}: ${TITLE}"
+          HEAD="${{ steps.naming.outputs.branch }}"
+          TITLE_LINE="${JIRA_KEY}: ${TITLE}"
 
-          # Try to find existing open PR from this branch
-          EXISTING=$(gh pr list --state open --head "${{ steps.naming.outputs.branch }}" --json url --jq '.[0].url')
+          # reuse existing open PR from this branch if present
+          EXISTING=$(gh pr list --state open --head "$HEAD" --json url --jq '.[0].url')
           if [ -n "$EXISTING" ]; then
             echo "url=$EXISTING" >> $GITHUB_OUTPUT
           else
             PR_URL=$(gh pr create \
-              --title "$TITLE" \
+              --title "$TITLE_LINE" \
               --body-file body.md \
               --base "$DEFAULT" \
-              --head "${{ steps.naming.outputs.branch }}" \
+              --head "$HEAD" \
               --draft)
             echo "url=$PR_URL" >> $GITHUB_OUTPUT
           fi
@@ -128,4 +126,4 @@ jobs:
           Notes:
           - Do not create new branches or PRs.
           - Commit directly to \`${{ steps.naming.outputs.branch }}\`.
-          - Keep changes minimal and adhere to project conventions and tests."    
+          - Keep changes minimal and adhere to project conventions and tests."
