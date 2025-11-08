@@ -1,0 +1,133 @@
+# EMS Project Setup & Usage Guide
+
+This document provides step-by-step instructions to set up and run the EMS (Employee Management System) project, which includes a .NET API backend and a Vue.js frontend UI.
+
+---
+
+## Prerequisites
+
+- [.NET 9 SDK](https://dotnet.microsoft.com/download/dotnet/9.0)
+- [Node.js (v18+ recommended)](https://nodejs.org/)
+- [npm](https://www.npmjs.com/)
+- MySQL Server (for database)
+
+---
+
+## Project Structure
+
+- `API/` - .NET API backend
+- `UI/` - Vue.js frontend
+
+---
+
+## Backend Setup (API)
+
+1. **Navigate to the API folder:**
+   ```sh
+   cd API
+   ```
+
+2. **Restore NuGet packages:**
+   ```sh
+   dotnet restore
+   ```
+
+3. **Configure Database Connection:**
+   - Edit `API/appsettings.json` and set your MySQL connection string under `ConnectionStrings:DefaultConnection`.
+
+4. **Apply Entity Framework migrations:**
+   ```sh
+   dotnet ef database update
+   ```
+   This will create all required tables and seed initial roles and users.
+
+5. **Run the API:**
+   ```sh
+   dotnet run
+   ```
+   The API will start on the port specified in `appsettings.json` or `Properties/launchSettings.json` (default: `http://localhost:5272`).
+
+---
+
+## Frontend Setup (UI)
+
+1. **Navigate to the UI folder:**
+   ```sh
+   cd UI
+   ```
+
+2. **Install dependencies:**
+   ```sh
+   npm install
+   ```
+
+3. **Run the development server:**
+   ```sh
+   npm run dev
+   ```
+   The app will be available at `http://localhost:5173`.
+
+4. **API Proxy Configuration:**
+   - The frontend is configured to proxy `/api` requests to the backend (`http://localhost:5272`) via `UI/vite.config.js`.
+
+---
+
+## Implemented Functionality
+
+### API Endpoints
+
+- **Add Employee:** `POST /api/employees`
+- **Edit Employee:** `PUT /api/employees/{id}`
+- **Soft Delete Employee:** `PUT /api/employees/{id}/delete`
+- **Get Employees:** `GET /api/employees`
+- **Get Employee by ID:** `GET /api/employees/{id}`
+
+See [`EmployeeController`](API/Controllers/EmployeeController.cs) for details.
+
+### Database
+
+- Tables: `Employees`, `Users`, `Roles`
+- Initial roles and users are seeded via migration ([20250823215834_SeedInitialRolesAndUsers.cs](API/Migrations/20250823215834_SeedInitialRolesAndUsers.cs)).
+
+### Frontend Features
+
+- **Employee List:** View, search, filter, edit, and delete employees ([EmployeeList.vue](UI/src/views/EmployeeList.vue)).
+- **Add Employee:** Form to add new employees ([AddEmployee.vue](UI/src/views/AddEmployee.vue)).
+- **Edit Employee:** Form to edit existing employees ([EditEmployee.vue](UI/src/views/EditEmployee.vue)).
+- **Routing:** Configured in [router.js](UI/src/router.js).
+- **API Integration:** Uses Axios for HTTP requests.
+
+---
+
+## Useful Commands
+
+### API
+
+- Build: `dotnet build`
+- Run: `dotnet run`
+- Migrate DB: `dotnet ef database update`
+
+### UI
+
+- Install deps: `npm install`
+- Run dev: `npm run dev`
+- Build: `npm run build`
+
+---
+
+## Troubleshooting
+
+- Ensure correct versions of .NET and Node.js are installed.
+- Check database connection string in `API/appsettings.json`.
+- For API errors, check terminal output.
+- For UI errors, check browser console and terminal output.
+
+---
+
+## Additional Notes
+
+- Configuration files:
+  - API: `API/appsettings.json`, `API/appsettings.Development.json`
+  - UI: `UI/vite.config.js`
+- Entity Framework migrations are in `API/Migrations/`.
+- For further help, consult the README files or contact the project

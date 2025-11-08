@@ -1,0 +1,64 @@
+name: Jira Ready → GitHub Issue
+
+on:
+  repository_dispatch:
+    types: [jira_ready_for_dev]
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  create_or_update_issue:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare Issue body
+        id: prep
+        run: |
+          cat > body.md << 'EOF'
+          **Jira**: ${{ github.event.client_payload.jiraKey }}
+          Link: ${{ github.event.client_payload.jiraUrl }}
+
+          ## Story
+          ${{ github.event.client_payload.title }}
+
+          ## Description
+          ${{ github.event.client_payload.description }}
+
+          ## Acceptance Criteria
+          ${{ github.event.client_payload.acceptanceCriteria }}
+
+          ---
+          _Labels from Jira_: `${{ github.event.client_payload.labels }}`
+          EOF
+
+      - name: Create or update Issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          title="${{ github.event.client_payload.jiraKey }}: ${{ github.event.client_payload.title }}"
+          num=$(gh issue list --search "$title in:title" --json number --jq '.[0].number')
+          if [ -n "$num" ]; then
+            echo "Issue exists #$num, adding comment"
+            gh issue comment "$num" -F body.md
+          else
+            echo "Creating new Issue"
+            gh issue create \
+              --title "$title" \
+              -F body.md \
+              --label "from-jira" \
+              --label "ready-for-dev"
+          fi
+
+      - name: Add quick actions comment (manual step)
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          title="${{ github.event.client_payload.jiraKey }}: ${{ github.event.client_payload.title }}"
+          num=$(gh issue list --search "$title in:title" --json number --jq '.[0].number')
+          gh issue comment "$num" --body $'**Next step (manual one-click):**\n- Assign this Issue to **Copilot’s coding agent** to start implementation.\n- Or run the **Create Branch & Draft PR** workflow from the Actions tab (if you prefer scaffolding first).'
+

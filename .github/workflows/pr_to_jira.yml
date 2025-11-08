@@ -1,0 +1,135 @@
+name: PR → Jira (post PR URL)
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+
+# Limit default token permissions
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  post-pr-to-jira:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Extract Jira key from PR title/body/branch
+        id: parse
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          BRANCH: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+
+          # Search order: PR title → PR body → branch name
+          find_key() {
+            local s="$1"
+            if [[ "$s" =~ ([A-Z][A-Z0-9]+-[0-9]+) ]]; then
+              echo "${BASH_REMATCH[1]}"
+              return 0
+            fi
+            return 1
+          }
+
+          ISSUE_KEY=""
+          for SRC in "$PR_TITLE" "$PR_BODY" "$BRANCH"; do
+            if KEY="$(find_key "$SRC")"; then
+              ISSUE_KEY="$KEY"
+              break
+            fi
+          done
+
+          echo "issue_key=$ISSUE_KEY" >> "$GITHUB_OUTPUT"
+
+          if [ -z "$ISSUE_KEY" ]; then
+            echo "No Jira issue key found in PR title/body/branch."
+            echo "To auto-link, include a key like ABC-123 in the branch or PR."
+          fi
+
+      - name: Stop early if no Jira key
+        if: steps.parse.outputs.issue_key == ''
+        run: |
+          echo "Skipping Jira update because no issue key was detected."
+          exit 0
+
+      - name: Post PR URL as a Jira comment
+        env:
+          JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
+          JIRA_USER_EMAIL: ${{ secrets.JIRA_USER_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          ISSUE_KEY: ${{ steps.parse.outputs.issue_key }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${JIRA_BASE_URL:-}" ] || [ -z "${JIRA_USER_EMAIL:-}" ] || [ -z "${JIRA_API_TOKEN:-}" ]; then
+            echo "Missing Jira secrets. Please set JIRA_BASE_URL, JIRA_USER_EMAIL, JIRA_API_TOKEN."
+            exit 1
+          fi
+
+          BODY=$(jq -n \
+            --arg pr "$PR_URL" \
+            --arg num "$PR_NUMBER" \
+            --arg actor "$ACTOR" \
+            '{body: ("Pull request #" + $num + " by " + $actor + ": " + $pr)}')
+
+          curl --fail --silent --show-error \
+            --request POST \
+            --url "$JIRA_BASE_URL/rest/api/3/issue/$ISSUE_KEY/comment" \
+            --user "$JIRA_USER_EMAIL:$JIRA_API_TOKEN" \
+            --header 'Content-Type: application/json' \
+            --data "$BODY"
+
+      - name: (Optional) Add a Jira Remote Link to the PR
+        if: steps.parse.outputs.issue_key != ''
+        env:
+          JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
+          JIRA_USER_EMAIL: ${{ secrets.JIRA_USER_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          ISSUE_KEY: ${{ steps.parse.outputs.issue_key }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+
+          REMOTE_LINK=$(jq -n \
+            --arg url "$PR_URL" \
+            --arg title "Pull request #$PR_NUMBER" \
+            '{
+               object: {
+                 url: $url,
+                 title: $title,
+                 icon: { url16x16: "https://github.githubassets.com/favicons/favicon.png" }
+               },
+               relationship: "Pull request"
+             }')
+
+          curl --fail --silent --show-error \
+            --request POST \
+            --url "$JIRA_BASE_URL/rest/api/3/issue/$ISSUE_KEY/remotelink" \
+            --user "$JIRA_USER_EMAIL:$JIRA_API_TOKEN" \
+            --header 'Content-Type: application/json' \
+            --data "$REMOTE_LINK"
+
+      - name: (Optional) Store PR number as a Jira issue property
+        if: steps.parse.outputs.issue_key != ''
+        env:
+          JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
+          JIRA_USER_EMAIL: ${{ secrets.JIRA_USER_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          ISSUE_KEY: ${{ steps.parse.outputs.issue_key }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+
+          # Save as issue property "pullRequestNumber" for later Jira→GitHub automations
+          curl --fail --silent --show-error \
+            --request PUT \
+            --url "$JIRA_BASE_URL/rest/api/3/issue/$ISSUE_KEY/properties/pullRequestNumber" \
+            --user "$JIRA_USER_EMAIL:$JIRA_API_TOKEN" \
+            --header 'Content-Type: application/json' \
+            --data "$PR_NUMBER"
