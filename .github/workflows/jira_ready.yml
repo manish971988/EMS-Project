@@ -105,7 +105,7 @@ jobs:
               --label "from-jira" \
               --label "ready-for-dev" \
               "${LABEL_ARGS[@]}"
-          fi
+          fi   
 
       - name: Add quick actions comment (manual step)
         if: success()
